@@ -64,6 +64,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  bool isUpdating = false;
 
   void _incrementCounter() {
     setState(() {
@@ -103,6 +104,43 @@ class _MyHomePageState extends State<MyHomePage> {
         final PackageInfo packageInfo = await PackageInfo.fromPlatform();
         final String packageInfoVersion = packageInfo.version;
         if (updateResult.latestVersion > Version.parse(packageInfoVersion)) {
+          void exec() async {
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Terdapat Versi Terbaru'),
+                    content: SingleChildScrollView(
+                      child: ListBody(
+                        children: [
+                          Text('Mengunduh aplikasi..'),
+                          SizedBox(height: 16),
+                          LinearProgressIndicator(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            }
+            final StreamController<DownloadProgress> streamController =
+                await updateResult.initializeUpdate();
+            streamController.stream.listen(
+              (e) async {
+                if (e.completed) {
+                  await streamController.close();
+                  await updateResult.runUpdate(
+                    e.path,
+                    autoExit: true,
+                    exitDelay: 0,
+                  );
+                }
+              },
+            );
+          }
+
           if (mounted) {
             showDialog(
               context: context,
@@ -110,7 +148,7 @@ class _MyHomePageState extends State<MyHomePage> {
               builder: (BuildContext ctx) {
                 return AlertDialog(
                   title: const Text('Terdapat Versi Terbaru'),
-                  content: const SingleChildScrollView(
+                  content: SingleChildScrollView(
                     child: ListBody(
                       children: [
                         Text('Update diperlukan untuk menggunakan aplikasi.'),
@@ -120,23 +158,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   actions: [
                     TextButton(
                       child: const Text('Ya, unduh aplikasi'),
-                      onPressed: () async {
-                        final StreamController<DownloadProgress>
-                            streamController =
-                            await updateResult.initializeUpdate();
-                        streamController.stream.listen(
-                          (e) async {
-                            if (e.completed) {
-                              print('Download completed');
-                              await streamController.close();
-                              await updateResult.runUpdate(e.path,
-                                  autoExit: true, exitDelay: 2500);
-                            } else {
-                              print(
-                                  'Download in progress: ${e.receivedBytes}/${e.totalBytes}');
-                            }
-                          },
-                        );
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        exec();
                       },
                     ),
                     TextButton(
@@ -149,6 +173,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 );
               },
             );
+          } else {
+            exec();
           }
         }
       } else {
